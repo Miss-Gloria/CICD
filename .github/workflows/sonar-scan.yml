@@ -23,8 +23,8 @@ jobs:
       # Step 3: Dynamically Create/Update sonar-project.properties
       - name: Update SonarQube Configuration
         run: |
-          echo "sonar.projectKey=Gloria-website" > sonar-project.properties
-          echo "sonar.projectName=Gloria-website" >> sonar-project.properties
+          echo "sonar.projectKey=static-gee" > sonar-project.properties
+          echo "sonar.projectName=Static Gee Website" >> sonar-project.properties
           echo "sonar.projectVersion=1.0" >> sonar-project.properties
           echo "sonar.sources=." >> sonar-project.properties
           echo "sonar.inclusions=**/*.html,**/*.css,**/*.js" >> sonar-project.properties
@@ -43,11 +43,10 @@ jobs:
         run: |
           mkdir -p artifacts
           ./sonar-scanner-4.7.0.2747-linux/bin/sonar-scanner -X \
-            -Dsonar.projectKey=Gloria-website \
+            -Dsonar.projectKey=static-gee \
             -Dsonar.sources=. \
             -Dsonar.host.url=${{ secrets.SONARQUBE_URL }} \
             -Dsonar.login=${{ secrets.SONARQUBE_TOKEN }} > artifacts/sonar-scan.log 2>&1
-          # Sanitize the logs by replacing the URL with [HIDDEN]
           sed -i "s|${{ secrets.SONARQUBE_URL }}|[HIDDEN]|g" artifacts/sonar-scan.log
         env:
           SONARQUBE_URL: ${{ secrets.SONARQUBE_URL }}
@@ -61,7 +60,7 @@ jobs:
       - name: Check Quality Gate
         run: |
           status=$(curl -s -u ${{ secrets.SONARQUBE_TOKEN }}: \
-            "${{ secrets.SONARQUBE_URL }}/api/qualitygates/project_status?projectKey=Gloria-website" \
+            "${{ secrets.SONARQUBE_URL }}/api/qualitygates/project_status?projectKey=static-gee" \
             | jq -r '.projectStatus.status')
           echo "Quality Gate Status: $status"
           if [ "$status" == "NONE" ]; then
@@ -81,5 +80,5 @@ jobs:
       - name: Upload Logs and Reports
         uses: actions/upload-artifact@v4
         with:
-          name: sonarscan-logs
+          name: sonar-logs
           path: artifacts/sonar-scan.log
