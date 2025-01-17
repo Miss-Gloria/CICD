@@ -1,0 +1,85 @@
+name: Static Website CI/CD Pipeline with SonarQube
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  scan_and_validate:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Step 2: Set up Java (SonarScanner requires Java)
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      # Step 3: Dynamically Create/Update sonar-project.properties
+      - name: Update SonarQube Configuration
+        run: |
+          echo "sonar.projectKey=Gloria-website" > sonar-project.properties
+          echo "sonar.projectName=Gloria-website" >> sonar-project.properties
+          echo "sonar.projectVersion=1.0" >> sonar-project.properties
+          echo "sonar.sources=." >> sonar-project.properties
+          echo "sonar.inclusions=**/*.html,**/*.css,**/*.js" >> sonar-project.properties
+          echo "sonar.language=js" >> sonar-project.properties
+          echo "sonar.sourceEncoding=UTF-8" >> sonar-project.properties
+
+      # Step 4: Download and Set Up SonarScanner
+      - name: Download SonarScanner
+        run: |
+          wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.7.0.2747-linux.zip
+          unzip sonar-scanner-cli-4.7.0.2747-linux.zip
+          chmod +x ./sonar-scanner-4.7.0.2747-linux/bin/sonar-scanner
+
+      # Step 5: Run SonarScanner for Static Code Analysis
+      - name: Run SonarScanner
+        run: |
+          mkdir -p artifacts
+          ./sonar-scanner-4.7.0.2747-linux/bin/sonar-scanner -X \
+            -Dsonar.projectKey=Gloria-website \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=${{ secrets.SONARQUBE_URL }} \
+            -Dsonar.login=${{ secrets.SONARQUBE_TOKEN }} > artifacts/sonar-scan.log 2>&1
+          # Sanitize the logs by replacing the URL with [HIDDEN]
+          sed -i "s|${{ secrets.SONARQUBE_URL }}|[HIDDEN]|g" artifacts/sonar-scan.log
+        env:
+          SONARQUBE_URL: ${{ secrets.SONARQUBE_URL }}
+          SONARQUBE_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+
+      # Step 6: Install jq (Required for Quality Gate Parsing)
+      - name: Install jq
+        run: sudo apt-get install jq -y
+
+      # Step 7: Check SonarQube Quality Gate Status
+      - name: Check Quality Gate
+        run: |
+          status=$(curl -s -u ${{ secrets.SONARQUBE_TOKEN }}: \
+            "${{ secrets.SONARQUBE_URL }}/api/qualitygates/project_status?projectKey=Gloria-website" \
+            | jq -r '.projectStatus.status')
+          echo "Quality Gate Status: $status"
+          if [ "$status" == "NONE" ]; then
+            echo "No Quality Gate applied to the project! Please check SonarQube settings."
+            exit 1
+          elif [ "$status" != "OK" ]; then
+            echo "Quality Gate Failed!"
+            exit 1
+          else
+            echo "Quality Gate Passed!"
+          fi
+        env:
+          SONARQUBE_URL: ${{ secrets.SONARQUBE_URL }}
+          SONARQUBE_TOKEN: ${{ secrets.SONARQUBE_TOKEN }}
+
+      # Step 8: Archive Logs and Reports
+      - name: Upload Logs and Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonarscan-logs
+          path: artifacts/sonar-scan.log
